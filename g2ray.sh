@@ -191,7 +191,7 @@ generate_config() {
 
 	local XHTTP_BLOCK WS_BLOCK INBOUNDS
 	XHTTP_BLOCK="{ \"tag\":\"vless-xhttp-in\", \"port\":${XRAY_PORT}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"xhttp\", \"security\":\"none\", \"xhttpSettings\":{ \"mode\":\"packet-up\", \"path\":\"/\", \"maxUploadSize\":1000000, \"maxConcurrentUploads\":10 } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
-	WS_BLOCK="{ \"tag\":\"vless-ws-in\", \"port\":${WS_P}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"ws\", \"security\":\"none\", \"wsSettings\":{ \"path\":\"${WS_PATH}\", \"host\":\"${WS_D}\" } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
+	WS_BLOCK="{ \"tag\":\"vless-ws-in\", \"port\":${WS_P}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"ws\", \"security\":\"none\", \"wsSettings\":{ \"path\":\"${WS_PATH}\" } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
 
 	case "$PROTO" in
 		ws)   INBOUNDS="$WS_BLOCK" ;;
