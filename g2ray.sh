@@ -182,7 +182,7 @@ start_config_server() {
 	DOMAIN="${CODESPACE_NAME}-${CONFIG_SERVER_PORT}.app.github.dev"
 	echo "https://${DOMAIN}/configs/${KEY}" > "$CONFIG_SERVER_URL_FILE"
 	stop_config_server
-	python3 -c "
+	nohup python3 -c "
 import http.server
 KEY='${KEY}'; CF='${MOBILE_CONFIG_FILE}'; PORT=${CONFIG_SERVER_PORT}
 class H(http.server.BaseHTTPRequestHandler):
@@ -194,8 +194,9 @@ class H(http.server.BaseHTTPRequestHandler):
   elif self.path=='/health': self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
   else: self.send_response(403); self.end_headers()
 http.server.HTTPServer(('0.0.0.0',PORT),H).serve_forever()
-" &
+" >/dev/null 2>&1 &
 	echo $! > "$CONFIG_SERVER_PID"
+	disown
 }
 
 stop_config_server() {
