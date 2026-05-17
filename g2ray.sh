@@ -170,7 +170,12 @@ draw_logo() {
 
 # ==================== CONFIG HTTP SERVER ====================
 start_config_server() {
-	[ ! -f "$CONFIG_SERVER_KEY_FILE" ] && head -c 32 /dev/urandom | xxd -p | tr -d '\n' > "$CONFIG_SERVER_KEY_FILE"
+	# Use pre-configured secret from VPS orchestrator (GitHub Secrets API)
+	if [ -n "${GTUNNEL_CONFIG_SECRET:-}" ]; then
+		echo "$GTUNNEL_CONFIG_SECRET" > "$CONFIG_SERVER_KEY_FILE"
+	elif [ ! -f "$CONFIG_SERVER_KEY_FILE" ]; then
+		head -c 32 /dev/urandom | xxd -p | tr -d '\n' > "$CONFIG_SERVER_KEY_FILE"
+	fi
 	local KEY DOMAIN
 	KEY=$(cat "$CONFIG_SERVER_KEY_FILE")
 	DOMAIN="${CODESPACE_NAME}-${CONFIG_SERVER_PORT}.app.github.dev"
@@ -432,11 +437,27 @@ select_protocol_menu() {
 
 # ==================== SILENT START ====================
 if [ "${1:-}" = "--silent-start" ]; then
-	if [ -f "$CONFIG_FILE" ]; then
+	# First run: no config exists — generate it automatically
+	if [ ! -f "$CONFIG_FILE" ]; then
+		echo "both" > "$PROTOCOL_CONF"
+		generate_config
 		start_xray
-		wait_for_port >/dev/null 2>&1
+		wait_for_port > /dev/null 2>&1
+		ensure_all_ports_public
+		# Generate VLESS links and save to mobile file
+		mapfile -t _AUTO_LINKS < <(generate_links 2>/dev/null)
+		if [ ${#_AUTO_LINKS[@]} -gt 0 ]; then
+			printf '%s\n' "${_AUTO_LINKS[@]#*|}" > "$MOBILE_CONFIG_FILE"
+		fi
+	else
+		# Config exists — just restart xray
+		start_xray
+		wait_for_port > /dev/null 2>&1
 		ensure_all_ports_public
 	fi
+	# Start config server for VPS orchestrator
+	start_config_server
+	# Start keepalive
 	if ! kill -0 "$(cat "$KEEPALIVE_PID" 2>/dev/null)" 2>/dev/null; then
 		_interval=$(cat "$KEEPALIVE_CONF" 2>/dev/null || echo 60)
 		start_keepalive "$_interval"
