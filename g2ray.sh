@@ -9,10 +9,13 @@ UUID_FILE="$DATA_DIR/uuid.txt"
 CUSTOM_IP_FILE="$DATA_DIR/custom_ip.txt"
 KEEPALIVE_CONF="$DATA_DIR/keepalive.conf"
 KEEPALIVE_PID="$DATA_DIR/keepalive.pid"
+PROTOCOL_CONF="$DATA_DIR/protocol.conf"
 LOG_DIR="$BASE_DIR/logs"
 MOBILE_CONFIG_FILE="$BASE_DIR/configs-to-copy-for-mobile.txt"
 XRAY_BIN="/usr/local/bin/xray"
 XRAY_PORT=443
+WS_PORT=8080
+WS_PATH="/g2ray-ws"
 
 mkdir -p "$DATA_DIR" "$LOG_DIR"
 
@@ -20,6 +23,7 @@ mkdir -p "$DATA_DIR" "$LOG_DIR"
 CUSTOM_IP=$(cat "$CUSTOM_IP_FILE" 2>/dev/null || true)
 
 [ ! -f "$KEEPALIVE_CONF" ] && echo "60" > "$KEEPALIVE_CONF"
+[ ! -f "$PROTOCOL_CONF" ] && echo "xhttp" > "$PROTOCOL_CONF"
 
 if [ -z "${CODESPACE_NAME:-}" ]; then
 	if command -v gh >/dev/null 2>&1; then
@@ -29,26 +33,18 @@ if [ -z "${CODESPACE_NAME:-}" ]; then
 	fi
 fi
 PORT_DOMAIN="${CODESPACE_NAME}-${XRAY_PORT}.app.github.dev"
+WS_DOMAIN="${CODESPACE_NAME}-${WS_PORT}.app.github.dev"
 
-# ==================== SEND TO FORWARDER ====================
-send_to_vless_forwarder() {
-	local vless_link="$1"
-	local GAS_URL="https://script.google.com/macros/s/AKfycbxSKbuuqgOtb5uOHEqDA_yS--0DCEnNH36XQS80Z_Jsm4NvMxdmyco0WTKQPmexEJVlTg/exec"
-	local json_payload
-	json_payload=$(jq -n --arg message "$vless_link" '{message: $message}')
-	echo -e "${YELLOW}Sending vless link to Google Script...${NC}"
-	if curl -s -L --max-time 15 -X POST "$GAS_URL" \
-		-H "Content-Type: application/json" \
-		-d "$json_payload" > /tmp/gas_response.txt 2>&1; then
-		if grep -q "Appended to GitHub" /tmp/gas_response.txt; then
-			echo -e "${GREEN}✅ vless link appended to GitHub file via Google Script${NC}"
-		else
-			echo -e "${RED}❌ Google Script failed or ignored:${NC}"
-			cat /tmp/gas_response.txt
-		fi
-	else
-		echo -e "${RED}❌ Could not reach Google Script (check network)${NC}"
-	fi
+get_protocol() { cat "$PROTOCOL_CONF" 2>/dev/null || echo "xhttp"; }
+
+# ==================== WS PORT HELPERS ====================
+ensure_ws_port_public() {
+	command -v gh >/dev/null 2>&1 && gh codespace ports visibility "${WS_PORT}:public" -c "$CODESPACE_NAME" >/dev/null 2>&1 || true
+}
+
+ensure_all_ports_public() {
+	ensure_codespace_port_public
+	[ "$(get_protocol)" = "both" ] && ensure_ws_port_public
 }
 
 # ==================== PORT / PROCESS HELPERS ====================
@@ -112,7 +108,7 @@ _keepalive_loop() {
 		if ! pgrep -f "$XRAY_BIN run" >/dev/null 2>&1; then
 			start_xray >/dev/null 2>&1 || true
 			sleep 3
-			ensure_codespace_port_public >/dev/null 2>&1 || true
+			ensure_all_ports_public >/dev/null 2>&1 || true
 		fi
 
 		sleep "$interval_sec"
@@ -150,8 +146,9 @@ estimate_quota() {
 	hours_left=$((remaining_sec / 3600))
 	mins_left=$(( (remaining_sec % 3600) / 60 ))
 	dis_time=$(date -d "+${remaining_sec} seconds" '+%Y-%m-%d %H:%M:%S' 2>/dev/null || echo "N/A")
+	echo -e "  ${YELLOW}⚠  Estimated from container uptime — not GitHub API${NC}"
 	echo -e "  Uptime consumed: ${WHITE}${hours_used}h ${mins_used}m${NC}"
-	echo -e "  Remaining quota: ${GREEN}${hours_left}h ${mins_left}m${NC} (of 60h tier)"
+	echo -e "  Remaining quota: ${GREEN}${hours_left}h ${mins_left}m${NC} ${DIM}(60h reference)${NC}"
 	echo -e "  Estimated stop at: ${YELLOW}${dis_time}${NC}"
 }
 
@@ -176,53 +173,71 @@ check_port_visibility() {
 		read -rp "  Press Enter to go back to main menu..."
 		return 1
 	fi
-	ensure_codespace_port_public
+	ensure_all_ports_public
 	return 0
 }
 
 # ==================== CONFIG GENERATION ====================
 generate_config() {
 	if ! command -v uuidgen >/dev/null 2>&1; then
-		echo -e "${RED}Error: uuidgen not found. Install uuid-runtime package.${NC}"
-		return 1
+		echo -e "${RED}Error: uuidgen not found.${NC}"; return 1
 	fi
 	uuidgen > "$UUID_FILE"
-	local UUID
+	local UUID PROTO WS_P WS_D
 	UUID=$(cat "$UUID_FILE")
-	cat > "$CONFIG_FILE" <<'JSONEOF'
+	PROTO=$(get_protocol)
+	# WS uses port 443 when alone, 8080 when combined with XHTTP
+	if [ "$PROTO" = "both" ]; then WS_P=$WS_PORT; WS_D=$WS_DOMAIN; else WS_P=$XRAY_PORT; WS_D=$PORT_DOMAIN; fi
+
+	local XHTTP_BLOCK WS_BLOCK INBOUNDS
+	XHTTP_BLOCK="{ \"tag\":\"vless-xhttp-in\", \"port\":${XRAY_PORT}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"xhttp\", \"security\":\"none\", \"xhttpSettings\":{ \"mode\":\"packet-up\", \"path\":\"/\", \"maxUploadSize\":1000000, \"maxConcurrentUploads\":10 } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
+	WS_BLOCK="{ \"tag\":\"vless-ws-in\", \"port\":${WS_P}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"ws\", \"security\":\"none\", \"wsSettings\":{ \"path\":\"${WS_PATH}\", \"headers\":{ \"Host\":\"${WS_D}\" } } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
+
+	case "$PROTO" in
+		ws)   INBOUNDS="$WS_BLOCK" ;;
+		both) INBOUNDS="${XHTTP_BLOCK}, ${WS_BLOCK}" ;;
+		*)    INBOUNDS="$XHTTP_BLOCK" ;;
+	esac
+
+	cat > "$CONFIG_FILE" <<JSONEOF
 {
   "log": { "loglevel": "warning", "access": "none", "error": "${LOG_DIR}/xray-error.log" },
   "stats": {},
   "api": { "tag": "api", "services": [ "StatsService" ] },
   "policy": { "system": { "statsInboundDownlink": true, "statsInboundUplink": true }, "levels": { "0": { "statsUserUplink": true, "statsUserDownlink": true, "handshake": 4, "connIdle": 300, "uplinkOnly": 2, "downlinkOnly": 5, "bufferSize": 128 } } },
   "dns": { "hosts": { "dns.google": "8.8.8.8", "dns.cloudflare": "1.1.1.1" }, "servers": [ { "address": "https://1.1.1.1/dns-query", "domains": [ "geosite:geolocation-!cn" ], "queryStrategy": "UseIP" }, "8.8.4.4", "localhost" ], "queryStrategy": "UseIPv4" },
-  "inbounds": [ { "tag": "vless-in", "port": ${XRAY_PORT}, "listen": "0.0.0.0", "protocol": "vless", "settings": { "clients": [ { "id": "${UUID}", "flow": "", "level": 0, "email": "user@G2rayXCodeLeafy" } ], "decryption": "none" }, "streamSettings": { "network": "xhttp", "security": "none", "xhttpSettings": { "mode": "packet-up", "path": "/", "maxUploadSize": 1000000, "maxConcurrentUploads": 10 } }, "sniffing": { "enabled": true, "destOverride": [ "http", "tls", "quic" ], "routeOnly": false } }, { "listen": "127.0.0.1", "port": 10085, "protocol": "dokodemo-door", "settings": { "address": "127.0.0.1" }, "tag": "api" } ],
+  "inbounds": [ ${INBOUNDS}, { "listen": "127.0.0.1", "port": 10085, "protocol": "dokodemo-door", "settings": { "address": "127.0.0.1" }, "tag": "api" } ],
   "outbounds": [ { "tag": "direct", "protocol": "freedom", "settings": { "domainStrategy": "UseIPv4" } }, { "tag": "block", "protocol": "blackhole", "settings": { "response": { "type": "http" } } } ],
   "routing": { "domainStrategy": "IPIfNonMatch", "rules": [ { "inboundTag": [ "api" ], "outboundTag": "api", "type": "field" }, { "type": "field", "ip": [ "geoip:private" ], "outboundTag": "block" }, { "type": "field", "protocol": [ "bittorrent" ], "outboundTag": "block" }, { "type": "field", "domain": [ "geosite:category-ads-all" ], "outboundTag": "block" } ] }
 }
 JSONEOF
-	sed -i "s/\${XRAY_PORT}/$XRAY_PORT/g; s/\${UUID}/$UUID/g; s|\${LOG_DIR}|$LOG_DIR|g" "$CONFIG_FILE"
 	start_xray
 	if wait_for_port >/dev/null 2>&1; then
-		echo -e "${GREEN}Engine started successfully on port ${XRAY_PORT}.${NC}"
+		echo -e "${GREEN}Engine started on port ${XRAY_PORT}.${NC}"
 	else
 		echo -e "${YELLOW}[ WARN ] Engine may not have bound to port ${XRAY_PORT}.${NC}"
 	fi
-	ensure_codespace_port_public
+	ensure_all_ports_public
 }
 
 # ==================== LINK GENERATION ====================
-generate_link() {
-	local UUID DOMAIN PUBLIC_IP
+# Outputs lines in format: TYPE|VLESS_LINK
+generate_links() {
+	local UUID PROTO PUBLIC_IP WS_P WS_D
 	UUID=$(cat "$UUID_FILE" 2>/dev/null || echo "")
-	[ -z "$UUID" ] && { echo ""; return 1; }
-	DOMAIN="$PORT_DOMAIN"
-	if [ -n "$CUSTOM_IP" ]; then
-		PUBLIC_IP="$CUSTOM_IP"
-	else
-		PUBLIC_IP=$(curl -s --max-time 4 https://api.ipify.org 2>/dev/null || echo "94.130.50.12")
-	fi
-	echo "vless://${UUID}@${PUBLIC_IP}:${XRAY_PORT}?encryption=none&security=tls&sni=${DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${DOMAIN}&path=%2F&mode=packet-up#G2rayXCodeLeafy"
+	[ -z "$UUID" ] && { return 1; }
+	PROTO=$(get_protocol)
+	if [ -n "$CUSTOM_IP" ]; then PUBLIC_IP="$CUSTOM_IP"
+	else PUBLIC_IP=$(curl -s --max-time 4 https://api.ipify.org 2>/dev/null || echo "94.130.50.12"); fi
+	if [ "$PROTO" = "both" ]; then WS_P=$WS_PORT; WS_D=$WS_DOMAIN
+	else WS_P=$XRAY_PORT; WS_D=$PORT_DOMAIN; fi
+	local L_XHTTP="vless://${UUID}@${PUBLIC_IP}:${XRAY_PORT}?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
+	local L_WS="vless://${UUID}@${PUBLIC_IP}:${WS_P}?encryption=none&security=tls&sni=${WS_D}&fp=chrome&type=ws&host=${WS_D}&path=%2Fg2ray-ws#G2ray-WS"
+	case "$PROTO" in
+		xhttp) echo "XHTTP|${L_XHTTP}" ;;
+		ws)    echo "WS|${L_WS}" ;;
+		both)  echo "XHTTP|${L_XHTTP}"; echo "WS|${L_WS}" ;;
+	esac
 }
 
 # ==================== FORMAT BYTES ====================
@@ -332,12 +347,36 @@ configure_keepalive_menu() {
 	done
 }
 
+# ==================== PROTOCOL MENU ====================
+select_protocol_menu() {
+	while true; do
+		clear; draw_logo
+		local CUR; CUR=$(get_protocol)
+		echo -e "  ${GREEN}🔌 Protocol Selection${NC}"
+		echo -e "  ${GREEN}──────────────────────────────────────────────${NC}"
+		echo -e "  Current: ${WHITE}${CUR}${NC}\n"
+		echo -e "  ${GREEN}1)${NC} XHTTP (packet-up)   ${DIM}← High stealth, HTTP/2, anti-DPI${NC}"
+		echo -e "  ${WHITE}2)${NC} WebSocket (WS)       ${DIM}← Low ping, universal app support${NC}"
+		echo -e "  ${WHITE}3)${NC} Both (XHTTP+WS)      ${DIM}← XHTTP on :443 & WS on :8080${NC}"
+		echo -e "  ${WHITE}0)${NC} Go Back\n"
+		echo -e "  ${YELLOW}⚠  After changing, use option 2 (Generate New Config).${NC}\n"
+		read -rp "  Select: " pc
+		case $pc in
+			1) echo "xhttp" > "$PROTOCOL_CONF"; echo -e "  ${GREEN}Set to XHTTP.${NC}"; sleep 1 ;;
+			2) echo "ws"    > "$PROTOCOL_CONF"; echo -e "  ${GREEN}Set to WebSocket.${NC}"; sleep 1 ;;
+			3) echo "both"  > "$PROTOCOL_CONF"; echo -e "  ${GREEN}Set to Both (XHTTP+WS).${NC}"; sleep 1 ;;
+			0) break ;;
+			*) echo -e "  ${RED}Invalid option.${NC}"; sleep 1 ;;
+		esac
+	done
+}
+
 # ==================== SILENT START ====================
 if [ "${1:-}" = "--silent-start" ]; then
 	if [ -f "$CONFIG_FILE" ]; then
 		start_xray
 		wait_for_port >/dev/null 2>&1
-		ensure_codespace_port_public
+		ensure_all_ports_public
 	fi
 	if ! kill -0 "$(cat "$KEEPALIVE_PID" 2>/dev/null)" 2>/dev/null; then
 		_interval=$(cat "$KEEPALIVE_CONF" 2>/dev/null || echo 60)
@@ -370,7 +409,7 @@ if [ ! -f "$CONFIG_FILE" ]; then
 elif ! pgrep -f "$XRAY_BIN run" > /dev/null; then
 	start_xray
 	wait_for_port >/dev/null 2>&1
-	ensure_codespace_port_public
+	ensure_all_ports_public
 fi
 
 # ==================== MAIN LOOP ====================
@@ -396,56 +435,41 @@ while true; do
 	echo -e "${YELLOW}  ⚙️  Configuration${NC}"
 	echo -e "  ${WHITE}6)${NC} Multi-IP / CDN Routing"
 	echo -e "  ${WHITE}7)${NC} Keepalive Settings"
+	echo -e "  ${WHITE}8)${NC} Protocol Selection  ${DIM}[$(get_protocol)]${NC}"
 	echo ""
 	echo -e "${YELLOW}  📊 Analytics & Tools${NC}"
-	echo -e "  ${WHITE}8)${NC} Data Usage"
-	echo -e "  ${WHITE}9)${NC} Resource Stats"
-	echo -e "  ${WHITE}10)${NC} Quota & Uptime"
-	echo -e "  ${WHITE}11)${NC} Server Location"
-	echo -e "  ${WHITE}12)${NC} View Engine Logs"
+	echo -e "  ${WHITE}9)${NC}  Data Usage"
+	echo -e "  ${WHITE}10)${NC} Resource Stats"
+	echo -e "  ${WHITE}11)${NC} Quota & Uptime"
+	echo -e "  ${WHITE}12)${NC} Server Location"
+	echo -e "  ${WHITE}13)${NC} View Engine Logs"
 	echo ""
 	echo -e "  ${RED}0)${NC} Exit Panel"
 	echo -e "${GREEN}──────────────────────────────────────────────────────────${NC}"
-	read -rp "  Select an option [0-12]: " _choice
+	read -rp "  Select an option [0-13]: " _choice
 	case $_choice in
 		1)
 			check_port_visibility || continue
-			_VLESS=$(generate_link)
-			[ -z "$_VLESS" ] && { echo -e "${RED}Error generating link${NC}"; sleep 2; continue; }
-
-			echo "$_VLESS" > "$MOBILE_CONFIG_FILE"
-
-			VLESS_HASH=$(echo -n "$_VLESS" | md5sum | awk '{print $1}')
-			PROMPT_FLAG="$DATA_DIR/.prompted_${VLESS_HASH}"
-			if [ ! -f "$PROMPT_FLAG" ]; then
-				clear; draw_logo
-				echo -e "  ${GREEN}🎉 Your New G2ray Node is Ready!${NC}\n"
-				echo -e "  ${WHITE}Would you like to securely donate this config to the developer?${NC}"
-				echo -e "  ${DIM}Donating helps other people easily connect and bypass restrictions.${NC}"
-				echo -e "  ${DIM}This will NOT at all affect your config speed, performance, or quota.${NC}"
-				echo -e "  ${DIM}Your privacy is fully protected.${NC}\n"
-				read -rp "  Donate config? (y/n): " _share
-				if [[ "$_share" =~ ^[Yy]$ ]]; then
-					echo -e "  ${DIM}Sending donated config...${NC}"
-					send_to_vless_forwarder "$_VLESS"
-					echo -e "  ${GREEN}Donated successfully! Thank you.${NC}"
-					sleep 1.5
-				fi
-				touch "$PROMPT_FLAG"
-			fi
+			mapfile -t _LINKS < <(generate_links 2>/dev/null)
+			[ ${#_LINKS[@]} -eq 0 ] && { echo -e "${RED}Error generating link${NC}"; sleep 2; continue; }
+			# Save all links to mobile file
+			printf '%s\n' "${_LINKS[@]#*|}" > "$MOBILE_CONFIG_FILE"
 			clear; draw_logo
-			echo -e "  ${GREEN}Scan to Connect (G2rayXCodeLeafy):${NC}\n"
-			if command -v qrencode >/dev/null 2>&1; then
-				qrencode -t ANSIUTF8 "$_VLESS" | sed 's/^/  /'
-			else
-				echo -e "  ${DIM}(qrencode not installed - QR code unavailable)${NC}"
-			fi
-			echo -e "\n  ${GREEN}Your Direct Link:${NC}"
-			echo -e "  ${WHITE}${_VLESS}${NC}\n"
+			echo -e "  ${GREEN}🔗 Your Connection Links${NC}\n"
+			for _ENTRY in "${_LINKS[@]}"; do
+				_TYPE="${_ENTRY%%|*}"
+				_LINK="${_ENTRY#*|}"
+				echo -e "  ${YELLOW}── ${_TYPE} ──────────────────────────────────${NC}"
+				if command -v qrencode >/dev/null 2>&1; then
+					qrencode -t ANSIUTF8 "$_LINK" | sed 's/^/  /'
+				else
+					echo -e "  ${DIM}(qrencode not installed)${NC}"
+				fi
+				echo -e "\n  ${GREEN}Link:${NC}"
+				echo -e "  ${WHITE}${_LINK}${NC}\n"
+			done
 			echo -e "  ${YELLOW}──────────────────────────────────────────────${NC}"
-			echo -e "  ${GREEN}📱 Mobile Config saved to:${NC}"
-			echo -e "  ${WHITE}${MOBILE_CONFIG_FILE}${NC}"
-			echo -e "  ${DIM}Open that file and copy the link directly into your mobile app.${NC}"
+			echo -e "  ${GREEN}📱 All links saved to:${NC} ${WHITE}${MOBILE_CONFIG_FILE}${NC}"
 			echo -e "  ${YELLOW}──────────────────────────────────────────────${NC}\n"
 			read -rp "  Press Enter to return..."
 			;;
@@ -479,12 +503,13 @@ while true; do
 			clear; draw_logo
 			start_xray
 			wait_for_port
-			ensure_codespace_port_public
+			ensure_all_ports_public
 			sleep 1
 			;;
 		6) multi_ip_menu ;;
 		7) configure_keepalive_menu ;;
-		8)
+		8) select_protocol_menu ;;
+		9)
 			clear; draw_logo
 			echo -e "${GREEN}📡 G2ray Data Usage${NC}\n"
 			if pgrep -f "$XRAY_BIN run" > /dev/null; then
@@ -518,15 +543,15 @@ while true; do
 			echo ""
 			read -rp "  Press Enter to return..."
 			;;
-		9) show_resource_stats ;;
-		10)
+		10) show_resource_stats ;;
+		11)
 			clear; draw_logo
 			echo -e "${GREEN}⏱️ Codespace Quota & Uptime${NC}\n"
 			estimate_quota
 			echo ""
 			read -rp "  Press Enter to return..."
 			;;
-		11)
+		12)
 			clear; draw_logo
 			echo -e "  ${DIM}Fetching server details...${NC}\n"
 			if command -v jq >/dev/null 2>&1; then
@@ -545,7 +570,7 @@ while true; do
 			echo ""
 			read -rp "  Press Enter to return..."
 			;;
-		12)
+		13)
 			clear; draw_logo
 			echo -e "${GREEN}📜 Live Engine Logs (Last 15 Lines)${NC}"
 			echo -e "${GREEN}──────────────────────────────────────────────${NC}"

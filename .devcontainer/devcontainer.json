@@ -16,13 +16,19 @@
   "postAttachCommand": "bash ./g2ray.sh",
   "portsAttributes": {
     "443": {
-      "label": "g2ray-vless",
+      "label": "g2ray-xhttp",
+      "protocol": "http",
+      "onAutoForward": "silent",
+      "visibility": "public"
+    },
+    "8080": {
+      "label": "g2ray-ws",
       "protocol": "http",
       "onAutoForward": "silent",
       "visibility": "public"
     }
   },
-  "forwardPorts": [443],
+  "forwardPorts": [443, 8080],
   "hostRequirements": {
     "cpus": 2
   },
