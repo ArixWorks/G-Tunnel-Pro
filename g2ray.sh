@@ -49,6 +49,7 @@ ensure_ws_port_public() {
 ensure_all_ports_public() {
 	ensure_codespace_port_public
 	[ "$(get_protocol)" = "both" ] && ensure_ws_port_public
+	command -v gh >/dev/null 2>&1 && gh codespace ports visibility "${CONFIG_SERVER_PORT}:public" -c "$CODESPACE_NAME" >/dev/null 2>&1 || true
 }
 
 # ==================== PORT / PROCESS HELPERS ====================
@@ -174,7 +175,7 @@ start_config_server() {
 	if [ -n "${GTUNNEL_CONFIG_SECRET:-}" ]; then
 		echo "$GTUNNEL_CONFIG_SECRET" > "$CONFIG_SERVER_KEY_FILE"
 	elif [ ! -f "$CONFIG_SERVER_KEY_FILE" ]; then
-		head -c 32 /dev/urandom | xxd -p | tr -d '\n' > "$CONFIG_SERVER_KEY_FILE"
+		python3 -c "import secrets; print(secrets.token_hex(16), end='')" > "$CONFIG_SERVER_KEY_FILE"
 	fi
 	local KEY DOMAIN
 	KEY=$(cat "$CONFIG_SERVER_KEY_FILE")
