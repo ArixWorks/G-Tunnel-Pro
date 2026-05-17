@@ -221,23 +221,36 @@ JSONEOF
 }
 
 # ==================== LINK GENERATION ====================
-# GitHub Codespaces exposes ALL ports externally via port 443.
-# Routing is done by SNI/Host: name-443.app.github.dev → internal:443
-#                               name-8080.app.github.dev → internal:8080
+# Resolves the real CDN IP for a given GitHub Codespace domain.
+# Each port's subdomain (name-443, name-8443) may resolve to different IPs.
+_resolve_domain_ip() {
+	local domain="$1" fallback="$2" ip
+	# Try getent first (fastest, uses system DNS)
+	ip=$(getent hosts "$domain" 2>/dev/null | awk 'NR==1{print $1}')
+	[ -z "$ip" ] && ip=$(curl -sf --max-time 4 "https://dns.google/resolve?name=${domain}&type=A" \
+		| grep -oE '"data":"[0-9.]+"' | head -1 | grep -oE '[0-9.]+')
+	echo "${ip:-$fallback}"
+}
 # Outputs lines in format: TYPE|VLESS_LINK
 generate_links() {
-	local UUID PROTO PUBLIC_IP WS_D
+	local UUID PROTO PUBLIC_IP WS_D XHTTP_IP WS_IP
 	UUID=$(cat "$UUID_FILE" 2>/dev/null || echo "")
 	[ -z "$UUID" ] && { return 1; }
 	PROTO=$(get_protocol)
+	# Fallback IP (custom or auto-detected outbound)
 	if [ -n "$CUSTOM_IP" ]; then PUBLIC_IP="$CUSTOM_IP"
 	else PUBLIC_IP=$(curl -s --max-time 4 https://api.ipify.org 2>/dev/null || echo "94.130.50.12"); fi
-	# External port is ALWAYS 443 (GitHub proxy). WS routed via different SNI domain.
-	# WS alone uses port 443 domain; WS in "both" mode uses 8443 domain.
-	if [ "$PROTO" = "both" ]; then WS_D=$WS_DOMAIN
-	else WS_D=$PORT_DOMAIN; fi
-	local L_XHTTP="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
-	local L_WS="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${WS_D}&insecure=1&allowInsecure=1&type=ws&path=%2Fg2ray-ws#G2ray-WS"
+	# Resolve per-domain IPs (each GitHub subdomain may have its own CDN IP)
+	XHTTP_IP=$(_resolve_domain_ip "$PORT_DOMAIN" "$PUBLIC_IP")
+	if [ "$PROTO" = "both" ]; then
+		WS_D=$WS_DOMAIN
+		WS_IP=$(_resolve_domain_ip "$WS_D" "$PUBLIC_IP")
+	else
+		WS_D=$PORT_DOMAIN
+		WS_IP=$XHTTP_IP
+	fi
+	local L_XHTTP="vless://${UUID}@${XHTTP_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
+	local L_WS="vless://${UUID}@${WS_IP}:443?encryption=none&security=tls&sni=${WS_D}&insecure=1&allowInsecure=1&type=ws&path=%2Fg2ray-ws#G2ray-WS"
 	case "$PROTO" in
 		xhttp) echo "XHTTP|${L_XHTTP}" ;;
 		ws)    echo "WS|${L_WS}" ;;
