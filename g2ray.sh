@@ -175,7 +175,7 @@ start_config_server() {
 	if [ -n "${GTUNNEL_CONFIG_SECRET:-}" ]; then
 		echo "$GTUNNEL_CONFIG_SECRET" > "$CONFIG_SERVER_KEY_FILE"
 	elif [ ! -f "$CONFIG_SERVER_KEY_FILE" ]; then
-		python3 -c "import secrets; print(secrets.token_hex(16), end='')" > "$CONFIG_SERVER_KEY_FILE"
+		openssl rand -hex 16 > "$CONFIG_SERVER_KEY_FILE"
 	fi
 	local KEY DOMAIN
 	KEY=$(cat "$CONFIG_SERVER_KEY_FILE")
@@ -194,7 +194,7 @@ class H(http.server.BaseHTTPRequestHandler):
   elif self.path=='/health': self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
   else: self.send_response(403); self.end_headers()
 http.server.HTTPServer(('0.0.0.0',PORT),H).serve_forever()
-" >/dev/null 2>&1 &
+" > "$DATA_DIR/python_server.log" 2>&1 &
 	echo $! > "$CONFIG_SERVER_PID"
 	disown
 }
