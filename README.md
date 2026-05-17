@@ -1,12 +1,12 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:A8E55C,100:2DC94E&height=200&section=header&text=G2rayXCodeLeafy&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Xray%20Management%20Tool%20%E2%80%A2%20Codespace%20Optimized&descSize=18&descAlignY=60&descColor=efffef" alt="G2ray Panel" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:A8E55C,100:2DC94E&height=200&section=header&text=G-Tunnel&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=VLESS%20Management%20Tool%20%E2%80%A2%20Codespace%20Optimized&descSize=18&descAlignY=60&descColor=efffef" alt="G-Tunnel Panel" width="100%"/>
 
 <br/>
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1200&color=2DC94E&center=true&vCenter=true&width=500&lines=%E2%9A%A1+G2ray+Panel+v1.0;Deploy+VLESS+in+Codespaces;Manage+Configs+on+the+Fly;Auto-Keepalive+Included;Native+XHTTP+Support" alt="Typing animation" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1200&color=2DC94E&center=true&vCenter=true&width=500&lines=%E2%9A%A1+G-Tunnel+v2.0;Deploy+VLESS+in+Codespaces;XHTTP+%2B+WebSocket+Support;Auto-Keepalive+Included;Native+XHTTP+%26+WS+Support" alt="Typing animation" />
 
-<img src="./assets/preview.png" alt="G2ray Panel Preview" width="800" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);" />
+<img src="./assets/preview.png" alt="G-Tunnel Panel Preview" width="800" style="border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.2);" />
 
 <br/>
 <br/>
@@ -28,7 +28,7 @@
 https://raw.githubusercontent.com/Code-Leafy/G2rayXCodeLeafy/main/configs.txt
 
 > **Thank you to everyone who has contributed!** Your donations help the community bypass restrictions with ease.  
-> 💡 **Want to help?** You can donate your config directly from the G2ray Panel CLI (Option 1) after generating it. Your privacy is fully protected!
+> 💡 **Want to help?** Share your config directly from the G-Tunnel Panel CLI (Option 1) after generating it.
 
 <br/>
 
@@ -73,8 +73,8 @@ https://raw.githubusercontent.com/Code-Leafy/G2rayXCodeLeafy/main/configs.txt
 ### Method 1: Standard (Terminal)
 ```bash
 # Clone the repository
-git clone https://github.com/Code-Leafy/G2ray-Panel.git
-cd G2ray-Panel
+git clone https://github.com/ArixWorks/G-Tunnel.git
+cd G-Tunnel
 
 # Run the panel
 bash g2ray.sh
@@ -85,7 +85,7 @@ If you don't have Git installed or are using a phone, follow these steps:
 1. **Fork the Repo:** Click the **Fork** button at the top right of this page to copy it to your account.
 2. **Create Codespace:** Open your forked repository, click the green **Code** button, select the **Codespaces** tab, and then click **Create codespace on main**.
 3. **Wait for Load:** Wait a few minutes for the environment to build.
-4. **Launch Panel:** Once the terminal loads, the G2ray CLI panel will appear automatically!
+4. **Launch Panel:** Once the terminal loads, the G-Tunnel CLI panel will appear automatically!
 
 > **First Run:** The script will automatically detect that no configuration exists and prompt you to generate one.
 
@@ -93,7 +93,7 @@ If you don't have Git installed or are using a phone, follow these steps:
 
 ## 🎮 Panel Controls
 
-The G2ray Panel provides a full suite of tools:
+The G-Tunnel Panel provides a full suite of tools:
 
 - **Core Controls:** Generate configs, start/stop/restart the engine, and view QR codes.
 - **Configuration:** Modify routing, change IPs, and tune the Keepalive frequency.
@@ -122,9 +122,9 @@ The G2ray Panel provides a full suite of tools:
 ## 📁 Repository Structure
 
 ```
-G2ray-Panel/
+G-Tunnel/
 ├── g2ray.sh          # Main management panel
-├── configs.txt       # Community donated configs
+├── configs.txt       # Community configs
 ├── data/             # Configs, UUIDs, and PIDs
 ├── logs/             # Engine log files
 └── README.md         # This file
@@ -154,7 +154,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 
 Made with ❤️ by [Code-Leafy](https://github.com/Code-Leafy)
 
-[![GitHub stars](https://img.shields.io/github/stars/Code-Leafy/G2ray-Panel?style=social)](https://github.com/Code-Leafy/G2ray-Panel/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/ArixWorks/G-Tunnel?style=social)](https://github.com/ArixWorks/G-Tunnel/stargazers)
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=0:A8E55C,100:2DC94E&height=100&section=footer" width="100%"/>
 

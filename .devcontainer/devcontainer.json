@@ -1,5 +1,5 @@
 {
-  "name": "G2ray-Codespace",
+  "name": "G-Tunnel-Codespace",
   "build": {
     "dockerfile": "Dockerfile",
     "context": "."
@@ -16,13 +16,13 @@
   "postAttachCommand": "bash ./g2ray.sh",
   "portsAttributes": {
     "443": {
-      "label": "g2ray-xhttp",
+      "label": "gtunnel-xhttp",
       "protocol": "http",
       "onAutoForward": "silent",
       "visibility": "public"
     },
     "8443": {
-      "label": "g2ray-ws",
+      "label": "gtunnel-ws",
       "protocol": "http",
       "onAutoForward": "silent",
       "visibility": "public"

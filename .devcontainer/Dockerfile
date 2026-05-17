@@ -1,6 +1,6 @@
 FROM debian:bookworm-slim
 
-LABEL maintainer="G2rayXCodeLeafy" \
+LABEL maintainer="G-Tunnel" \
       description="Made By CodeLeafy"
 
 RUN apt-get update && apt-get install -y --no-install-recommends \

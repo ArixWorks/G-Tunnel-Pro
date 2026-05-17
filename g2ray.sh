@@ -15,7 +15,7 @@ MOBILE_CONFIG_FILE="$BASE_DIR/configs-to-copy-for-mobile.txt"
 XRAY_BIN="/usr/local/bin/xray"
 XRAY_PORT=443
 WS_PORT=8443
-WS_PATH="/g2ray-ws"
+WS_PATH="/gtunnel-ws"
 
 mkdir -p "$DATA_DIR" "$LOG_DIR"
 
@@ -161,7 +161,7 @@ draw_logo() {
 	echo " ██║   ██║██╔═══╝ ██╔══██╗██╔══██║  ╚██╔╝  "
 	echo " ╚██████╔╝███████╗██║  ██║██║  ██║   ██║   "
 	echo "  ╚═════╝ ╚══════╝╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   "
-	echo -e "${NC}${WHITE}  G2ray Panel | Made By CodeLeafy${NC}\n"
+	echo -e "${NC}${WHITE}  G-Tunnel Panel | Made By CodeLeafy${NC}\n"
 }
 
 # ==================== PORT VISIBILITY CHECK ====================
@@ -190,8 +190,8 @@ generate_config() {
 	if [ "$PROTO" = "both" ]; then WS_P=$WS_PORT; WS_D=$WS_DOMAIN; else WS_P=$XRAY_PORT; WS_D=$PORT_DOMAIN; fi
 
 	local XHTTP_BLOCK WS_BLOCK INBOUNDS
-	XHTTP_BLOCK="{ \"tag\":\"vless-xhttp-in\", \"port\":${XRAY_PORT}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"xhttp\", \"security\":\"none\", \"xhttpSettings\":{ \"mode\":\"packet-up\", \"path\":\"/\", \"maxUploadSize\":1000000, \"maxConcurrentUploads\":10 } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
-	WS_BLOCK="{ \"tag\":\"vless-ws-in\", \"port\":${WS_P}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@g2ray\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"ws\", \"security\":\"none\", \"wsSettings\":{ \"path\":\"${WS_PATH}\" } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
+	XHTTP_BLOCK="{ \"tag\":\"vless-xhttp-in\", \"port\":${XRAY_PORT}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@gtunnel\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"xhttp\", \"security\":\"none\", \"xhttpSettings\":{ \"mode\":\"packet-up\", \"path\":\"/\", \"maxUploadSize\":1000000, \"maxConcurrentUploads\":10 } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
+	WS_BLOCK="{ \"tag\":\"vless-ws-in\", \"port\":${WS_P}, \"listen\":\"0.0.0.0\", \"protocol\":\"vless\", \"settings\":{ \"clients\":[{ \"id\":\"${UUID}\", \"flow\":\"\", \"level\":0, \"email\":\"user@gtunnel\" }], \"decryption\":\"none\" }, \"streamSettings\":{ \"network\":\"ws\", \"security\":\"none\", \"wsSettings\":{ \"path\":\"${WS_PATH}\" } }, \"sniffing\":{ \"enabled\":true, \"destOverride\":[\"http\",\"tls\",\"quic\"], \"routeOnly\":false } }"
 
 	case "$PROTO" in
 		ws)   INBOUNDS="$WS_BLOCK" ;;
@@ -259,8 +259,8 @@ generate_links() {
 		WS_D=$PORT_DOMAIN
 		WS_IP=$XHTTP_IP
 	fi
-	local L_XHTTP="vless://${UUID}@${XHTTP_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
-	local L_WS="vless://${UUID}@${WS_IP}:443?encryption=none&security=tls&sni=${WS_D}&insecure=1&allowInsecure=1&type=ws&path=%2Fg2ray-ws#G2ray-WS"
+	local L_XHTTP="vless://${UUID}@${XHTTP_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G-Tunnel-XHTTP"
+	local L_WS="vless://${UUID}@${WS_IP}:443?encryption=none&security=tls&sni=${WS_D}&insecure=1&allowInsecure=1&type=ws&path=%2Fgtunnel-ws#G-Tunnel-WS"
 	case "$PROTO" in
 		xhttp) echo "XHTTP|${L_XHTTP}" ;;
 		ws)    echo "WS|${L_WS}" ;;
@@ -422,7 +422,7 @@ fi
 
 if [ ! -f "$CONFIG_FILE" ]; then
 	clear; draw_logo
-	echo -e "  ${WHITE}Welcome to G2ray Setup!${NC}"
+	echo -e "  ${WHITE}Welcome to G-Tunnel Setup!${NC}"
 	echo -e "  ${DIM}No configuration found — first run detected.${NC}\n"
 	echo -e "  Protocol: ${GREEN}both${NC} ${DIM}(XHTTP + WebSocket — default)${NC}\n"
 	echo -e "  ${GREEN}1)${NC} Generate Config & Start Engine"
@@ -567,7 +567,7 @@ while true; do
 		8) select_protocol_menu ;;
 		9)
 			clear; draw_logo
-			echo -e "${GREEN}📡 G2ray Data Usage${NC}\n"
+			echo -e "${GREEN}📡 G-Tunnel Data Usage${NC}\n"
 			if pgrep -f "$XRAY_BIN run" > /dev/null; then
 				STATS=$(sudo "$XRAY_BIN" api statsquery -server=127.0.0.1:10085 2>/dev/null || echo "")
 				if [ -n "$STATS" ]; then
@@ -639,7 +639,7 @@ while true; do
 			echo ""
 			read -rp "  Press Enter to return..."
 			;;
-		0) echo -e "\n  Exiting G2ray Panel..."; exit 0 ;;
+		0) echo -e "\n  Exiting G-Tunnel Panel..."; exit 0 ;;
 		*) echo -e "  ${RED}Invalid option.${NC}"; sleep 1 ;;
 	esac
 done
