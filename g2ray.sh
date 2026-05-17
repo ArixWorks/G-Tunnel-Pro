@@ -23,7 +23,7 @@ mkdir -p "$DATA_DIR" "$LOG_DIR"
 CUSTOM_IP=$(cat "$CUSTOM_IP_FILE" 2>/dev/null || true)
 
 [ ! -f "$KEEPALIVE_CONF" ] && echo "60" > "$KEEPALIVE_CONF"
-[ ! -f "$PROTOCOL_CONF" ] && echo "xhttp" > "$PROTOCOL_CONF"
+[ ! -f "$PROTOCOL_CONF" ] && echo "both" > "$PROTOCOL_CONF"
 
 if [ -z "${CODESPACE_NAME:-}" ]; then
 	if command -v gh >/dev/null 2>&1; then
@@ -218,6 +218,16 @@ JSONEOF
 		echo -e "${YELLOW}[ WARN ] Engine may not have bound to port ${XRAY_PORT}.${NC}"
 	fi
 	ensure_all_ports_public
+	# Validate generated JSON
+	if command -v jq >/dev/null 2>&1; then
+		if ! jq empty "$CONFIG_FILE" >/dev/null 2>&1; then
+			echo -e "${RED}[ ERROR ] Generated config.json is invalid JSON! Check logs.${NC}"
+			return 1
+		fi
+		local INBOUND_COUNT
+		INBOUND_COUNT=$(jq '[.inbounds[] | select(.tag != "api")] | length' "$CONFIG_FILE" 2>/dev/null || echo 0)
+		echo -e "  ${DIM}Active inbounds: ${INBOUND_COUNT} protocol(s) loaded.${NC}"
+	fi
 }
 
 # ==================== LINK GENERATION ====================
@@ -414,10 +424,12 @@ if [ ! -f "$CONFIG_FILE" ]; then
 	clear; draw_logo
 	echo -e "  ${WHITE}Welcome to G2ray Setup!${NC}"
 	echo -e "  ${DIM}No configuration found — first run detected.${NC}\n"
+	echo -e "  Protocol: ${GREEN}both${NC} ${DIM}(XHTTP + WebSocket — default)${NC}\n"
 	echo -e "  ${GREEN}1)${NC} Generate Config & Start Engine"
 	echo -e "  ${WHITE}2)${NC} Exit\n"
 	read -rp "  Select: " _setup
 	if [ "$_setup" = "1" ]; then
+		echo "both" > "$PROTOCOL_CONF"
 		generate_config
 		echo -e "\n  ${GREEN}Setup complete!${NC}"
 		sleep 1
@@ -429,6 +441,32 @@ elif ! pgrep -f "$XRAY_BIN run" > /dev/null; then
 	wait_for_port >/dev/null 2>&1
 	ensure_all_ports_public
 fi
+
+# ==================== AUTO-SHOW LINKS ON ATTACH ====================
+_auto_show_links() {
+	clear; draw_logo
+	echo -e "  ${GREEN}🔗 Active Connection Links${NC}"
+	echo -e "  ${DIM}Protocol: $(get_protocol) | Engine: Running${NC}\n"
+	mapfile -t _AL < <(generate_links 2>/dev/null)
+	if [ ${#_AL[@]} -eq 0 ]; then
+		echo -e "  ${YELLOW}No links available. Try Generate New Config (option 2).${NC}\n"
+		return
+	fi
+	printf '%s\n' "${_AL[@]#*|}" > "$MOBILE_CONFIG_FILE"
+	for _E in "${_AL[@]}"; do
+		_T="${_E%%|*}"; _L="${_E#*|}"
+		echo -e "  ${YELLOW}── ${_T} ──────────────────────────────────────────${NC}"
+		if command -v qrencode >/dev/null 2>&1; then
+			qrencode -t ANSIUTF8 "$_L" | sed 's/^/  /'
+		fi
+		echo -e "\n  ${WHITE}${_L}${NC}\n"
+	done
+	echo -e "  ${GREEN}📱 Saved to:${NC} ${DIM}${MOBILE_CONFIG_FILE}${NC}"
+	echo -e "  ${GREEN}──────────────────────────────────────────────────────${NC}"
+	echo -e "  ${DIM}Press Enter to open main menu...${NC}"
+	read -r
+}
+_auto_show_links
 
 # ==================== MAIN LOOP ====================
 while true; do
