@@ -221,18 +221,22 @@ JSONEOF
 }
 
 # ==================== LINK GENERATION ====================
+# GitHub Codespaces exposes ALL ports externally via port 443.
+# Routing is done by SNI/Host: name-443.app.github.dev → internal:443
+#                               name-8080.app.github.dev → internal:8080
 # Outputs lines in format: TYPE|VLESS_LINK
 generate_links() {
-	local UUID PROTO PUBLIC_IP WS_P WS_D
+	local UUID PROTO PUBLIC_IP WS_D
 	UUID=$(cat "$UUID_FILE" 2>/dev/null || echo "")
 	[ -z "$UUID" ] && { return 1; }
 	PROTO=$(get_protocol)
 	if [ -n "$CUSTOM_IP" ]; then PUBLIC_IP="$CUSTOM_IP"
 	else PUBLIC_IP=$(curl -s --max-time 4 https://api.ipify.org 2>/dev/null || echo "94.130.50.12"); fi
-	if [ "$PROTO" = "both" ]; then WS_P=$WS_PORT; WS_D=$WS_DOMAIN
-	else WS_P=$XRAY_PORT; WS_D=$PORT_DOMAIN; fi
-	local L_XHTTP="vless://${UUID}@${PUBLIC_IP}:${XRAY_PORT}?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
-	local L_WS="vless://${UUID}@${PUBLIC_IP}:${WS_P}?encryption=none&security=tls&sni=${WS_D}&fp=chrome&type=ws&host=${WS_D}&path=%2Fg2ray-ws#G2ray-WS"
+	# WS domain differs (8080 internal) but external port is ALWAYS 443
+	if [ "$PROTO" = "both" ]; then WS_D=$WS_DOMAIN
+	else WS_D=$PORT_DOMAIN; fi
+	local L_XHTTP="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
+	local L_WS="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${WS_D}&fp=chrome&type=ws&host=${WS_D}&path=%2Fg2ray-ws#G2ray-WS"
 	case "$PROTO" in
 		xhttp) echo "XHTTP|${L_XHTTP}" ;;
 		ws)    echo "WS|${L_WS}" ;;
