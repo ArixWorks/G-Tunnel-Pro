@@ -14,7 +14,7 @@ LOG_DIR="$BASE_DIR/logs"
 MOBILE_CONFIG_FILE="$BASE_DIR/configs-to-copy-for-mobile.txt"
 XRAY_BIN="/usr/local/bin/xray"
 XRAY_PORT=443
-WS_PORT=8080
+WS_PORT=8443
 WS_PATH="/g2ray-ws"
 
 mkdir -p "$DATA_DIR" "$LOG_DIR"
@@ -232,11 +232,12 @@ generate_links() {
 	PROTO=$(get_protocol)
 	if [ -n "$CUSTOM_IP" ]; then PUBLIC_IP="$CUSTOM_IP"
 	else PUBLIC_IP=$(curl -s --max-time 4 https://api.ipify.org 2>/dev/null || echo "94.130.50.12"); fi
-	# WS domain differs (8080 internal) but external port is ALWAYS 443
+	# External port is ALWAYS 443 (GitHub proxy). WS routed via different SNI domain.
+	# WS alone uses port 443 domain; WS in "both" mode uses 8443 domain.
 	if [ "$PROTO" = "both" ]; then WS_D=$WS_DOMAIN
 	else WS_D=$PORT_DOMAIN; fi
 	local L_XHTTP="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${PORT_DOMAIN}&fp=chrome&alpn=h2&insecure=1&allowInsecure=1&type=xhttp&host=${PORT_DOMAIN}&path=%2F&mode=packet-up#G2ray-XHTTP"
-	local L_WS="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${WS_D}&fp=chrome&type=ws&host=${WS_D}&path=%2Fg2ray-ws#G2ray-WS"
+	local L_WS="vless://${UUID}@${PUBLIC_IP}:443?encryption=none&security=tls&sni=${WS_D}&insecure=1&allowInsecure=1&type=ws&path=%2Fg2ray-ws#G2ray-WS"
 	case "$PROTO" in
 		xhttp) echo "XHTTP|${L_XHTTP}" ;;
 		ws)    echo "WS|${L_WS}" ;;

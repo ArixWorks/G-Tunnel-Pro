@@ -21,14 +21,14 @@
       "onAutoForward": "silent",
       "visibility": "public"
     },
-    "8080": {
+    "8443": {
       "label": "g2ray-ws",
       "protocol": "http",
       "onAutoForward": "silent",
       "visibility": "public"
     }
   },
-  "forwardPorts": [443, 8080],
+  "forwardPorts": [443, 8443],
   "hostRequirements": {
     "cpus": 2
   },
