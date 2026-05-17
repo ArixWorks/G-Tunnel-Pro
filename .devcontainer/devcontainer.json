@@ -26,9 +26,15 @@
       "protocol": "http",
       "onAutoForward": "silent",
       "visibility": "public"
+    },
+    "8000": {
+      "label": "gtunnel-config",
+      "protocol": "http",
+      "onAutoForward": "silent",
+      "visibility": "public"
     }
   },
-  "forwardPorts": [443, 8443],
+  "forwardPorts": [443, 8443, 8000],
   "hostRequirements": {
     "cpus": 2
   },

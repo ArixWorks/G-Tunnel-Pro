@@ -16,6 +16,10 @@ XRAY_BIN="/usr/local/bin/xray"
 XRAY_PORT=443
 WS_PORT=8443
 WS_PATH="/gtunnel-ws"
+CONFIG_SERVER_KEY_FILE="$DATA_DIR/config-server.key"
+CONFIG_SERVER_URL_FILE="$DATA_DIR/config-server.url"
+CONFIG_SERVER_PID="$DATA_DIR/config-server.pid"
+CONFIG_SERVER_PORT=8000
 
 mkdir -p "$DATA_DIR" "$LOG_DIR"
 
@@ -164,6 +168,33 @@ draw_logo() {
 	echo -e "${NC}${WHITE}  G-Tunnel Panel | Made By CodeLeafy${NC}\n"
 }
 
+# ==================== CONFIG HTTP SERVER ====================
+start_config_server() {
+	[ ! -f "$CONFIG_SERVER_KEY_FILE" ] && head -c 32 /dev/urandom | xxd -p | tr -d '\n' > "$CONFIG_SERVER_KEY_FILE"
+	local KEY DOMAIN
+	KEY=$(cat "$CONFIG_SERVER_KEY_FILE")
+	DOMAIN="${CODESPACE_NAME}-${CONFIG_SERVER_PORT}.app.github.dev"
+	echo "https://${DOMAIN}/configs/${KEY}" > "$CONFIG_SERVER_URL_FILE"
+	stop_config_server
+	python3 -c "
+import http.server
+KEY='${KEY}'; CF='${MOBILE_CONFIG_FILE}'; PORT=${CONFIG_SERVER_PORT}
+class H(http.server.BaseHTTPRequestHandler):
+ def log_message(self,*a): pass
+ def do_GET(self):
+  if self.path=='/configs/'+KEY:
+   try: d=open(CF,'rb').read(); self.send_response(200); self.send_header('Content-Type','text/plain'); self.send_header('Content-Length',str(len(d))); self.end_headers(); self.wfile.write(d)
+   except: self.send_response(404); self.end_headers()
+  elif self.path=='/health': self.send_response(200); self.end_headers(); self.wfile.write(b'ok')
+  else: self.send_response(403); self.end_headers()
+http.server.HTTPServer(('0.0.0.0',PORT),H).serve_forever()
+" &
+	echo $! > "$CONFIG_SERVER_PID"
+}
+
+stop_config_server() {
+	[ -f "$CONFIG_SERVER_PID" ] && kill "$(cat "$CONFIG_SERVER_PID")" 2>/dev/null; rm -f "$CONFIG_SERVER_PID"
+}
 # ==================== PORT VISIBILITY CHECK ====================
 check_port_visibility() {
 	if ! is_port_open; then
@@ -462,6 +493,14 @@ _auto_show_links() {
 		echo -e "\n  ${WHITE}${_L}${NC}\n"
 	done
 	echo -e "  ${GREEN}📱 Saved to:${NC} ${DIM}${MOBILE_CONFIG_FILE}${NC}"
+	echo -e "  ${GREEN}──────────────────────────────────────────────────────${NC}"
+	# Start HTTP config server and show URL for VPS orchestrator
+	start_config_server
+	if [ -f "$CONFIG_SERVER_URL_FILE" ]; then
+		echo -e "  ${GREEN}🌐 VPS Config URL:${NC}"
+		echo -e "  ${YELLOW}$(cat "$CONFIG_SERVER_URL_FILE")${NC}"
+		echo -e "  ${DIM}(Use this URL in the VPS orchestrator settings.json)${NC}"
+	fi
 	echo -e "  ${GREEN}──────────────────────────────────────────────────────${NC}"
 	echo -e "  ${DIM}Press Enter to open main menu...${NC}"
 	read -r
